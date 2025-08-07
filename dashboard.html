@@ -5,7 +5,6 @@
   <title>Dashboard</title>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap" rel="stylesheet" />
   <style>
-    /* ... Your existing CSS unchanged ... */
     * {
       box-sizing: border-box;
       font-family: 'Poppins', sans-serif;
@@ -174,9 +173,24 @@
 </div>
 
 <script>
-  let allProducts = JSON.parse(localStorage.getItem("productData")) || [];
+  // ✅ Auto-load default products if missing
+  let allProducts = [];
 
-  // Load cart from localStorage if exists, else empty object
+  if (localStorage.getItem("products")) {
+    allProducts = JSON.parse(localStorage.getItem("products"));
+  } else {
+    allProducts = [
+      { code: "m001", name: "Milk", price: 50, stock: 10 },
+      { code: "m002", name: "Mango Juice", price: 120, stock: 15 },
+      { code: "s001", name: "Sugar", price: 70, stock: 25 },
+      { code: "c001", name: "Cookies", price: 150, stock: 18 },
+      { code: "b001", name: "Bread", price: 40, stock: 20 },
+      { code: "t001", name: "Tea", price: 90, stock: 22 },
+      { code: "o001", name: "Oil", price: 180, stock: 12 }
+    ];
+    localStorage.setItem("products", JSON.stringify(allProducts));
+  }
+
   const cart = JSON.parse(localStorage.getItem("cartData")) || {};
 
   const searchInput = document.getElementById("searchInput");
@@ -272,7 +286,6 @@
     window.location.href = "index.html";
   }
 
-  // Save cart to localStorage
   function saveCart() {
     localStorage.setItem("cartData", JSON.stringify(cart));
   }
@@ -293,9 +306,6 @@
   });
 
   window.addEventListener("load", () => {
-    if (!allProducts.length) {
-      alert("No product data found. Please open products.html once to load products.");
-    }
     renderCart();
   });
 </script>
