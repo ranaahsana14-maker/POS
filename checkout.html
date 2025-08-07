@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>POS - CHECKOUT</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 30px;
+      background: url('https://images.unsplash.com/photo-1647427017067-8f33ccbae493?q=80&w=1170&auto=format&fit=crop') no-repeat center center fixed;
+      background-size: cover;
+      color: #fff;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: rgba(255 255 255 / 0.1);
+      padding: 30px;
+      border-radius: 15px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    }
+    h2 {
+      margin-top: 0;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+    }
+    table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      color: #fff;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(255 255 255 / 0.3);
+      text-align: left;
+    }
+    th {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 14px;
+    }
+    .total {
+      font-size: 1.4em;
+      text-align: right;
+      margin-top: 20px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+    }
+    .buttons {
+      margin-top: 30px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 14px 26px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background 0.3s ease;
+      font-size: 16px;
+      user-select: none;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .print-btn {
+      background: #28a745;
+      color: #fff;
+    }
+    .print-btn:hover {
+      background: #218838;
+    }
+    .clear-btn {
+      background: #dc3545;
+      color: #fff;
+    }
+    .clear-btn:hover {
+      background: #c82333;
+    }
+    /* Print styling */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      .print-area, .print-area * {
+        visibility: visible;
+      }
+      .print-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+        color: black;
+        padding: 20px;
+        font-family: 'Poppins', sans-serif;
+      }
+      table {
+        color: black;
+        border-color: black;
+      }
+      th, td {
+        border-bottom: 1px solid black !important;
+        color: black !important;
+      }
+      .total {
+        color: black !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Checkout</h2>
+    <div class="print-area">
+      <table id="cartTable">
+        <thead>
+          <tr><th>Code</th><th>Name</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+        </thead>
+        <tbody>
+          <!-- Filled by JS -->
+        </tbody>
+      </table>
+
+      <div class="total" id="totalAmount">Total: Rs. 0.00</div>
+    </div>
+
+    <div class="buttons">
+      <button class="print-btn" id="printSaveBtn">Print & Save PDF</button>
+      <button class="clear-btn" id="clearBtn">Clear Cart</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const cartTableBody = document.getElementById("cartTable").querySelector("tbody");
+    const totalAmountEl = document.getElementById("totalAmount");
+    const printSaveBtn = document.getElementById("printSaveBtn");
+    const clearBtn = document.getElementById("clearBtn");
+
+    // Use same key and data structure as dashboard for cart
+    let cartObj = JSON.parse(localStorage.getItem("cartData")) || {};
+    // Convert cart object to array for table rendering
+    let cart = Object.values(cartObj).map(item => ({
+      code: item.code,
+      name: item.name,
+      quantity: item.qty,
+      price: item.price
+    }));
+
+    function renderCart() {
+      cartTableBody.innerHTML = "";
+      let total = 0;
+
+      if (cart.length === 0) {
+        cartTableBody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:#bbb;'>Cart is empty.</td></tr>";
+        totalAmountEl.textContent = `Total: Rs. 0.00`;
+        return;
+      }
+
+      cart.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        total += itemTotal;
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${item.code}</td>
+          <td>${item.name}</td>
+          <td>${item.quantity}</td>
+          <td>Rs. ${item.price.toFixed(2)}</td>
+          <td>Rs. ${itemTotal.toFixed(2)}</td>
+        `;
+        cartTableBody.appendChild(tr);
+      });
+
+      totalAmountEl.textContent = `Total: Rs. ${total.toFixed(2)}`;
+    }
+
+    function reduceStockAndSaveSales() {
+      let monthlySales = JSON.parse(localStorage.getItem("monthlySales")) || {};
+      let now = new Date();
+      let key = `${now.getMonth()+1}-${now.getFullYear()}`;
+
+      let total = 0;
+      let itemsSold = 0;
+
+      // Load products once here to update stocks
+      let products = JSON.parse(localStorage.getItem("productData")) || [];
+
+      cart.forEach(item => {
+        total += item.price * item.quantity;
+        itemsSold += item.quantity;
+
+        // Reduce stock in products
+        const index = products.findIndex(p => p.code === item.code);
+        if (index !== -1) {
+          products[index].stock -= item.quantity;
+          if (products[index].stock < 0) products[index].stock = 0;
+        }
+      });
+
+      // Save updated products
+      localStorage.setItem("productData", JSON.stringify(products));
+
+      // Update monthly sales
+      if (!monthlySales[key]) {
+        monthlySales[key] = { totalSales: 0, itemsSold: 0 };
+      }
+      monthlySales[key].totalSales += total;
+      monthlySales[key].itemsSold += itemsSold;
+
+      localStorage.setItem("monthlySales", JSON.stringify(monthlySales));
+    }
+
+    // Save sale items in dailySales to localStorage (for Settings page report)
+    function saveSaleToDailySales() {
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10); // "YYYY-MM-DD"
+
+      let dailySales = JSON.parse(localStorage.getItem("dailySales")) || {};
+
+      // Prepare sale items in required format (code, name, qty, price)
+      const saleItems = cart.map(item => ({
+        code: item.code,
+        name: item.name,
+        qty: item.quantity,
+        price: item.price
+      }));
+
+      if (!dailySales[dateStr]) {
+        dailySales[dateStr] = [];
+      }
+      dailySales[dateStr].push(saleItems);
+
+      localStorage.setItem("dailySales", JSON.stringify(dailySales));
+    }
+
+    function generatePDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      doc.setFontSize(18);
+      doc.text("FRAGNANT POS Receipt", 14, 20);
+
+      doc.setFontSize(12);
+      let y = 35;
+      cart.forEach(item => {
+        doc.text(`${item.name} (${item.quantity} x Rs.${item.price.toFixed(2)}) = Rs.${(item.quantity * item.price).toFixed(2)}`, 14, y);
+        y += 10;
+      });
+
+      doc.setFontSize(14);
+      doc.text(totalAmountEl.textContent, 14, y + 10);
+
+      doc.save("POS_Receipt.pdf");
+    }
+
+    function printAndSave() {
+      if (cart.length === 0) {
+        alert("Cart is empty.");
+        return;
+      }
+      reduceStockAndSaveSales();
+      saveSaleToDailySales();
+      generatePDF();
+
+      // Open print dialog after slight delay so PDF save starts
+      setTimeout(() => {
+        window.print();
+      }, 100);
+
+      // Clear cart after printing and saving
+      localStorage.removeItem("cartData");
+      cart = [];
+      renderCart();
+
+      alert("Checkout successful! Cart cleared.");
+    }
+
+    printSaveBtn.addEventListener("click", printAndSave);
+
+    clearBtn.addEventListener("click", () => {
+      localStorage.removeItem("cartData");
+      cart = [];
+      renderCart();
+    });
+
+    // Clear cart when leaving checkout page (like when user presses back)
+    window.addEventListener("beforeunload", () => {
+      localStorage.removeItem("cartData");
+    });
+
+    renderCart();
+  </script>
+</body>
+</html>

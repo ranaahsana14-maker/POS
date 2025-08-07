@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Products Database</title>
+  <script>
+    const products = [
+      { code: "m001", name: "Milk", price: 50 },
+      { code: "m002", name: "Mango Juice", price: 120 },
+      { code: "s001", name: "Sugar", price: 70 },
+      { code: "c001", name: "Cookies", price: 150 },
+      { code: "b001", name: "Bread", price: 40 },
+      { code: "t001", name: "Tea", price: 90 },
+      { code: "o001", name: "Oil", price: 180 }
+    ];
+    localStorage.setItem("productData", JSON.stringify(products));
+  </script>
+</head>
+<body>
+  <h2>Product data saved to localStorage.</h2>
+</body>
+</html>
