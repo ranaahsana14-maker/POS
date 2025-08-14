@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Products Database Loader</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    .btn { padding: 10px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    .btn:hover { background: #0056b3; }
+    .notification { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.7); color: white; padding: 10px 20px; border-radius: 8px; z-index: 1000; opacity: 0; transition: opacity 0.5s ease-in-out; }
+    .notification.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <h2>Product Loader</h2>
+  <p>This tool loads default products into localStorage.</p>
+  <button class="btn" onclick="loadProducts()">Load Products</button>
+  <p><a href="dashboard.html">Go to Dashboard</a></p>
+  <div id="notification" class="notification"></div>
+
+  <script>
+    const notificationEl = document.getElementById("notification");
+    function showNotification(message, duration = 3000) { notificationEl.textContent = message; notificationEl.classList.add("show"); setTimeout(() => notificationEl.classList.remove("show"), duration); }
+
+    const defaultProducts = [
+      { code: "m001", name: "Milk", price: 50, stock: 10 },
+      { code: "m002", name: "Mango Juice", price: 120, stock: 15 },
+      { code: "s001", name: "Sugar", price: 70, stock: 25 },
+      { code: "c001", name: "Cookies", price: 150, stock: 18 },
+      { code: "b001", name: "Bread", price: 40, stock: 20 },
+      { code: "t001", name: "Tea", price: 90, stock: 22 },
+      { code: "o001", name: "Oil", price: 180, stock: 12 }
+    ];
+
+    function loadProducts() {
+      const existing = JSON.parse(localStorage.getItem("products")) || [];
+      if (existing.length > 0) {
+        if (!confirm("Products already exist. Overwrite them?")) { showNotification("❌ Operation cancelled. Existing products kept.", 3000); return; }
+      }
+      localStorage.setItem("products", JSON.stringify(defaultProducts));
+      showNotification("✅ Default products loaded successfully.", 3000);
+    }
+  </script>
+</body>
+</html>

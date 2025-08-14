@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CHECKOUT</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+    body {
+      margin: 0; padding: 30px;
+      background: url('https://images.unsplash.com/photo-1647427017067-8f33ccbae493?q=80&w=1170&auto=format&fit=crop') no-repeat center center fixed;
+      background-size: cover; color: #fff;
+    }
+    .container { max-width: 900px; margin: 0 auto; background: rgba(255 255 255 / 0.1); padding: 30px; border-radius: 15px; backdrop-filter: blur(12px); box-shadow: 0 0 10px rgba(0,0,0,0.3); }
+    h2 { margin-top: 0; font-weight: 600; letter-spacing: 1.2px; }
+    table { width: 100%; margin-top: 20px; border-collapse: collapse; color: #fff; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid rgba(255 255 255 / 0.3); text-align: left; }
+    th { font-weight: 600; text-transform: uppercase; font-size: 14px; }
+    .total { font-size: 1.4em; text-align: right; margin-top: 20px; font-weight: 600; letter-spacing: 0.8px; }
+    .buttons { margin-top: 30px; display: flex; justify-content: flex-end; gap: 15px; flex-wrap: wrap; }
+    button { padding: 14px 26px; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; margin-top: 10px; transition: background 0.3s ease; font-size: 16px; user-select: none; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+    .print-btn { background: #28a745; color: #fff; } .print-btn:hover { background: #218838; }
+    .clear-btn { background: #dc3545; color: #fff; } .clear-btn:hover { background: #c82333; }
+    .notification { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.7); color: white; padding: 10px 20px; border-radius: 8px; z-index: 1000; opacity: 0; transition: opacity 0.5s ease-in-out; }
+    .notification.show { opacity: 1; }
+    @media print {
+      body * { visibility: hidden; }
+      .print-area, .print-area * { visibility: visible; }
+      .print-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+        color: black;
+        padding: 20px;
+        font-family: Arial, sans-serif;
+      }
+      .print-area table {
+        width: 100%;
+        border-collapse: collapse;
+        color: black;
+      }
+      .print-area th, .print-area td {
+        border-bottom: 1px solid black !important;
+        padding: 6px;
+        text-align: left;
+        font-size: 12px;
+      }
+      .print-area hr {
+        border: none;
+        border-top: 1px solid black;
+        margin: 5px 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Checkout</h2>
+
+    <!-- Print Layout -->
+    <div class="print-area" id="printArea">
+      <div style="text-align:center;">
+        <h1>POS</h1>
+        <p>Your Trusted Retail Partner</p>
+        <hr>
+        <div style="display:flex; justify-content:space-between; font-size:12px;">
+          <span id="printDate"></span>
+          <span id="printTransaction"></span>
+        </div>
+        <hr>
+      </div>
+
+      <table id="printCartTable">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Price</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <hr>
+      <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:14px;">
+        <span id="printItemsPurchased"></span>
+        <span id="printGrandTotal"></span>
+      </div>
+      <hr>
+
+      <div style="text-align:center; font-size:12px; margin-top:10px;">
+        <p>Thank you for your purchase!</p>
+        <p>Visit us again soon!</p>
+        <p>--- Powered by AHSAN POS ---</p>
+      </div>
+    </div>
+
+    <!-- Normal On-Screen Cart -->
+    <table id="cartTable">
+      <thead>
+        <tr><th>Code</th><th>Name</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="total" id="totalAmount">Total: Rs. 0.00</div>
+
+    <div class="buttons">
+      <button class="print-btn" id="printSaveBtn">Print & Save PDF</button>
+      <button class="clear-btn" id="clearBtn">Clear Cart</button>
+    </div>
+  </div>
+  <div id="notification" class="notification"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const cartTableBody = document.getElementById("cartTable").querySelector("tbody");
+    const totalAmountEl = document.getElementById("totalAmount");
+    const printSaveBtn = document.getElementById("printSaveBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const notificationEl = document.getElementById("notification");
+
+    function showNotification(message, duration = 3000) {
+      notificationEl.textContent = message; notificationEl.classList.add("show");
+      setTimeout(() => notificationEl.classList.remove("show"), duration);
+    }
+
+    let cartObj = JSON.parse(localStorage.getItem("cartData")) || {};
+    let cart = Object.values(cartObj).map(item => ({ code: item.code, name: item.name, quantity: item.qty, price: item.price }));
+
+    function renderCart() {
+      cartTableBody.innerHTML = ""; let total = 0;
+      if (cart.length === 0) {
+        cartTableBody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:#bbb;'>Cart is empty.</td></tr>";
+        totalAmountEl.textContent = `Total: Rs. 0.00`; return;
+      }
+      cart.forEach(item => {
+        const itemTotal = item.price * item.quantity; total += itemTotal;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${item.code}</td><td>${item.name}</td><td>${item.quantity}</td><td>Rs. ${(+item.price).toFixed(2)}</td><td>Rs. ${itemTotal.toFixed(2)}</td>`;
+        cartTableBody.appendChild(tr);
+      });
+      totalAmountEl.textContent = `Total: Rs. ${total.toFixed(2)}`;
+
+      // Fill print receipt data
+      document.getElementById("printDate").textContent = "Date: " + new Date().toLocaleString();
+      document.getElementById("printTransaction").textContent = "Transaction ID: " + Date.now().toString().slice(-8);
+      const printCartBody = document.querySelector("#printCartTable tbody");
+      printCartBody.innerHTML = "";
+      let totalItems = 0, grandTotal = 0;
+      cart.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        totalItems += item.quantity;
+        grandTotal += itemTotal;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${item.name}</td><td>${item.quantity}</td><td>Rs. ${(+item.price).toFixed(2)}</td><td>Rs. ${itemTotal.toFixed(2)}</td>`;
+        printCartBody.appendChild(tr);
+      });
+      document.getElementById("printItemsPurchased").textContent = `Items Purchased: ${totalItems}`;
+      document.getElementById("printGrandTotal").textContent = `Grand Total: Rs. ${grandTotal.toFixed(2)}`;
+    }
+
+    function reduceStockAndSaveSales() {
+      let monthlySales = JSON.parse(localStorage.getItem("monthlySales")) || {};
+      let now = new Date(); let key = `${now.getMonth()+1}-${now.getFullYear()}`;
+      let total = 0; let itemsSold = 0;
+      let products = JSON.parse(localStorage.getItem("products")) || [];
+      cart.forEach(item => {
+        total += item.price * item.quantity; itemsSold += item.quantity;
+        const index = products.findIndex(p => p.code === item.code);
+        if (index !== -1) { products[index].stock -= item.quantity; if (products[index].stock < 0) products[index].stock = 0; }
+      });
+      localStorage.setItem("products", JSON.stringify(products));
+      if (!monthlySales[key]) { monthlySales[key] = { totalSales: 0, itemsSold: 0 }; }
+      monthlySales[key].totalSales += total; monthlySales[key].itemsSold += itemsSold;
+      localStorage.setItem("monthlySales", JSON.stringify(monthlySales));
+    }
+
+    function saveSaleToDailySales() {
+      const now = new Date(); const dateStr = now.toISOString().slice(0, 10);
+      let dailySales = JSON.parse(localStorage.getItem("dailySales")) || {};
+      const saleItems = cart.map(item => ({ code: item.code, name: item.name, qty: item.quantity, price: item.price }));
+      if (!dailySales[dateStr]) { dailySales[dateStr] = []; }
+      dailySales[dateStr].push(saleItems);
+      localStorage.setItem("dailySales", JSON.stringify(dailySales));
+      const receipt = { id: Date.now(), date: now.toISOString(), items: saleItems };
+      const receipts = JSON.parse(localStorage.getItem("receipts") || "[]");
+      receipts.push(receipt); if (receipts.length > 100) receipts.shift();
+      localStorage.setItem("receipts", JSON.stringify(receipts));
+    }
+
+    function generatePDFAndOpen() {
+      const { jsPDF } = window.jspdf; const doc = new jsPDF();
+      const now = new Date(); const dateTime = now.toLocaleString();
+      let totalItems = 0; let grandTotal = 0;
+      cart.forEach(item => { totalItems += item.quantity; grandTotal += item.price * item.quantity; });
+
+      doc.setFontSize(22); doc.text("POS", doc.internal.pageSize.width / 2, 20, { align: 'center' });
+      doc.setFontSize(10); doc.text("Your Trusted Retail Partner", doc.internal.pageSize.width / 2, 27, { align: 'center' });
+      doc.line(14, 32, doc.internal.pageSize.width - 14, 32);
+      doc.setFontSize(10);
+      doc.text(`Date: ${dateTime}`, 14, 40);
+      doc.text(`Transaction ID: ${Date.now().toString().slice(-8)}`, doc.internal.pageSize.width - 14, 40, { align: 'right' });
+      doc.line(14, 45, doc.internal.pageSize.width - 14, 45);
+      let y = 55; doc.setFontSize(12); doc.setFont(undefined, 'bold');
+      doc.text("Item", 14, y); doc.text("Qty", 100, y); doc.text("Price", 130, y); doc.text("Total", 170, y);
+      doc.setFont(undefined, 'normal'); y += 5; doc.line(14, y, doc.internal.pageSize.width - 14, y); y += 10;
+      doc.setFontSize(10);
+      cart.forEach(item => {
+        const itemTotal = item.price * item.quantity;
+        doc.text(item.name, 14, y); doc.text(String(item.quantity), 100, y);
+        doc.text(`Rs. ${(+item.price).toFixed(2)}`, 130, y); doc.text(`Rs. ${itemTotal.toFixed(2)}`, 170, y);
+        y += 7;
+      });
+      y += 5; doc.line(14, y, doc.internal.pageSize.width - 14, y); y += 10;
+      doc.setFontSize(12); doc.setFont(undefined, 'bold');
+      doc.text(`Items Purchased: ${totalItems}`, 14, y);
+      doc.text(`Grand Total: Rs. ${grandTotal.toFixed(2)}`, doc.internal.pageSize.width - 14, y, { align: 'right' });
+      y += 15; doc.setFontSize(10); doc.setFont(undefined, 'normal');
+      doc.text("Thank you for your purchase!", doc.internal.pageSize.width / 2, y, { align: 'center' }); y += 7;
+      doc.text("Visit us again soon!", doc.internal.pageSize.width / 2, y, { align: 'center' }); y += 10;
+      doc.text("--- Powered by AHSAN POS ---", doc.internal.pageSize.width / 2, y, { align: 'center' });
+      const fileName = `POS_Receipt_${new Date().toISOString().replace(/[:.]/g,'-')}.pdf`;
+      doc.save(fileName);
+      showNotification("PDF receipt generated and downloaded.", 3000);
+    }
+
+    function printAndSave() {
+      if (cart.length === 0) { 
+        showNotification("Cart is empty. Nothing to checkout.", 3000); 
+        return; 
+      }
+      reduceStockAndSaveSales();
+      saveSaleToDailySales();
+      generatePDFAndOpen();
+      window.print();
+      localStorage.removeItem("cartData"); cart = []; renderCart();
+      showNotification("Checkout successful! Cart cleared.", 3000);
+      setTimeout(() => { window.location.href = "dashboard.html"; }, 1500);
+    }
+
+    printSaveBtn.addEventListener("click", printAndSave);
+    clearBtn.addEventListener("click", () => {
+      if (confirm("Clear the cart? This cannot be undone.")) { localStorage.removeItem("cartData"); cart = []; renderCart(); showNotification("Cart cleared.", 3000); }
+    });
+
+    window.addEventListener("beforeunload", () => { localStorage.removeItem("cartData"); });
+    renderCart();
+  </script>
+</body>
+</html>

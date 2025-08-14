@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Settings - Product & Sales Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+  body {
+    margin: 0; padding: 30px;
+    background: url('https://images.unsplash.com/photo-1647427017067-8f33ccbae493?q=80&w=1170&auto=format&fit=crop') no-repeat center center fixed;
+    background-size: cover; color: #fff;
+  }
+  .container { max-width: 900px; margin: 0 auto; background: rgba(0,0,0,0.5); padding: 30px; border-radius: 15px; backdrop-filter: blur(10px); }
+  h2 { margin-top: 0; }
+  label { display: block; margin-top: 15px; }
+  input[type=text], input[type=number] { width: 100%; padding: 8px 10px; margin-top: 6px; border-radius: 8px; border: none; font-size: 16px; }
+  button { margin-top: 20px; padding: 12px 20px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; background: #0f0; color: #000; transition: background 0.3s ease; }
+  button:hover { background: #0c0; }
+  table { width: 100%; margin-top: 20px; border-collapse: collapse; color: #fff; }
+  th, td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.3); text-align: left; }
+  .section { margin-top: 40px; }
+  .btn-report { background: #08f; color: white; } .btn-report:hover { background: #0059b3; }
+  .btn-back { background: #6c757d; color: white; margin-right: 10px; } .btn-back:hover { background: #5a6268; }
+  .btn-reset { background: #ffc107; color: #333; } .btn-reset:hover { background: #e0a800; }
+  .btn-export { background: #00c2ff; color: #000; } .btn-import { background: #ffd6e7; color: #000; }
+  .note { font-size: 0.9em; color: #ccc; }
+  #dailySalesContainer { max-height: 300px; overflow-y: auto; background: rgba(255 255 255 / 0.1); padding: 15px; border-radius: 10px; margin-top: 15px; color: #fff; font-size: 14px; white-space: pre-wrap; font-family: monospace; }
+  .notification { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0, 0, 0, 0.7); color: white; padding: 10px 20px; border-radius: 8px; z-index: 1000; opacity: 0; transition: opacity 0.5s ease-in-out; }
+  .notification.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2>Product Management</h2>
+      <button class="btn-back" onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
+    </div>
+
+    <form id="productForm">
+      <label for="code">Product Code (unique):</label>
+      <input type="text" id="code" required placeholder="e.g. m003" />
+
+      <label for="name">Product Name:</label>
+      <input type="text" id="name" required placeholder="e.g. Coffee" />
+
+      <label for="price">Price (Rs.):</label>
+      <input type="number" id="price" required min="0" step="0.01" />
+
+      <label for="stock">Stock Quantity:</label>
+      <input type="number" id="stock" required min="0" step="1" />
+
+      <button type="submit">Add / Update Product</button>
+    </form>
+
+    <div class="section">
+      <h2>Current Products</h2>
+      <table id="productsTable" aria-label="List of Products">
+        <thead>
+          <tr><th>Code</th><th>Name</th><th>Price (Rs.)</th><th>Stock Qty</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Monthly Sales Summary</h2>
+      <div class="note">* Monthly sales data is recorded during checkout.</div>
+      <table id="salesTable" aria-label="Monthly Sales Data">
+        <thead>
+          <tr><th>Month-Year</th><th>Total Sales (Rs.)</th><th>Items Sold</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h2>Daily Sales Details</h2>
+      <div class="note">* Shows sales by day and individual sale entries.</div>
+      <div id="dailySalesContainer">Loading daily sales...</div>
+    </div>
+
+    <div class="section" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn-report" id="generatePdfBtn">Generate Current Month's Detailed Sales PDF</button>
+      <button class="btn-reset" id="resetSalesBtn">Reset All Sales Data</button>
+      <button class="btn-export" id="exportBtn" type="button">Export Backup (JSON)</button>
+      <label class="btn-import" for="importFile" style="padding:12px 20px; border-radius:10px; cursor:pointer;">Import Backup (JSON)</label>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+    </div>
+  </div>
+<div id="notification" class="notification"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+  const productForm = document.getElementById("productForm");
+  const productsTableBody = document.querySelector("#productsTable tbody");
+  const salesTableBody = document.querySelector("#salesTable tbody");
+  const generatePdfBtn = document.getElementById("generatePdfBtn");
+  const resetSalesBtn = document.getElementById("resetSalesBtn");
+  const dailySalesContainer = document.getElementById("dailySalesContainer");
+  const notificationEl = document.getElementById("notification");
+  const exportBtn = document.getElementById("exportBtn");
+  const importFile = document.getElementById("importFile");
+
+  function showNotification(message, duration = 3000) {
+    notificationEl.textContent = message; notificationEl.classList.add("show");
+    setTimeout(() => notificationEl.classList.remove("show"), duration);
+  }
+
+  // Storage persist
+  (async () => {
+    if (navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch(e){} }
+  })();
+
+  let products = JSON.parse(localStorage.getItem("products")) || [];
+
+  function renderProducts() {
+    productsTableBody.innerHTML = "";
+    if (products.length === 0) {
+      productsTableBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#bbb;">No products added yet.</td></tr>`; return;
+    }
+    products.forEach(p => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${p.code}</td><td>${p.name}</td><td>${(+p.price).toFixed(2)}</td><td>${p.stock}</td>`;
+      productsTableBody.appendChild(tr);
+    });
+  }
+
+  productForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const code = productForm.code.value.trim();
+    const name = productForm.name.value.trim();
+    const price = parseFloat(productForm.price.value);
+    const stock = parseInt(productForm.stock.value);
+    if (!code || !name || isNaN(price) || isNaN(stock) || price < 0 || stock < 0) { showNotification("Please enter valid product details.", 3000); return; }
+    const index = products.findIndex(p => p.code.toLowerCase() === code.toLowerCase());
+    if (index >= 0) { products[index] = { code, name, price, stock }; showNotification("Product updated.", 3000); }
+    else { products.push({ code, name, price, stock }); showNotification("Product added.", 3000); }
+    localStorage.setItem("products", JSON.stringify(products));
+    renderProducts(); productForm.reset();
+  });
+
+  let monthlySales = JSON.parse(localStorage.getItem("monthlySales")) || {};
+  function renderMonthlySales() {
+    salesTableBody.innerHTML = "";
+    const months = Object.keys(monthlySales).sort();
+    if (months.length === 0) { salesTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">No sales data available.</td></tr>`; return; }
+    months.forEach(month => {
+      const data = monthlySales[month];
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${month}</td><td>Rs. ${(+data.totalSales).toFixed(2)}</td><td>${data.itemsSold}</td>`;
+      salesTableBody.appendChild(tr);
+    });
+  }
+
+  let dailySales = JSON.parse(localStorage.getItem("dailySales")) || {};
+  function cleanOldSales() {
+    const now = new Date();
+    // Bug fix: Keep daily sales for the last 12 months (current month + 11 previous months)
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    for (const dateStr of Object.keys(dailySales)) {
+      const date = new Date(dateStr);
+      if (date < twelveMonthsAgo) {
+        delete dailySales[dateStr];
+      }
+    }
+    localStorage.setItem("dailySales", JSON.stringify(dailySales));
+  }
+  cleanOldSales(); // Run on load to clean up old data
+
+  function renderDailySales() {
+    if (Object.keys(dailySales).length === 0) { dailySalesContainer.textContent = "No daily sales data available."; return; }
+    let output = ""; const sortedDates = Object.keys(dailySales).sort();
+    sortedDates.forEach(dateStr => {
+      output += `Date: ${dateStr}\n`; const salesOfDay = dailySales[dateStr];
+      salesOfDay.forEach((sale, i) => {
+        output += `  Sale #${i + 1}:\n`;
+        sale.forEach(item => { output += `    - ${item.name} x${item.qty} @ Rs.${(+item.price).toFixed(2)} each\n`; });
+        output += "\n";
+      }); output += "\n";
+    });
+    dailySalesContainer.textContent = output;
+  }
+
+  function resetAllSalesData() {
+    if (confirm("Are you sure you want to reset ALL monthly and daily sales data? This action cannot be undone.")) {
+      localStorage.removeItem("monthlySales"); localStorage.removeItem("dailySales");
+      monthlySales = {}; dailySales = {}; renderMonthlySales(); renderDailySales();
+      showNotification("✅ All sales data has been reset.", 3000);
+    } else { showNotification("❌ Sales data reset cancelled.", 3000); }
+  }
+
+  renderProducts(); renderMonthlySales(); renderDailySales();
+  generatePdfBtn.addEventListener("click", () => {
+    const now = new Date(); const currentMonth = now.getMonth(); const currentYear = now.getFullYear();
+    const productTotals = {}; let hasSalesForCurrentMonth = false;
+    for (const dateStr in dailySales) {
+      const date = new Date(dateStr);
+      if (date.getFullYear() === currentYear && date.getMonth() === currentMonth) {
+        hasSalesForCurrentMonth = true; const sales = dailySales[dateStr];
+        sales.forEach(sale => {
+          sale.forEach(item => {
+            if (!productTotals[item.code]) { productTotals[item.code] = { name: item.name, qty: 0, price: item.price }; }
+            productTotals[item.code].qty += item.qty;
+          });
+        });
+      }
+    }
+    if (!hasSalesForCurrentMonth) { showNotification("No sales data for the current month to export.", 3000); return; }
+
+    const { jsPDF } = window.jspdf; const doc = new jsPDF();
+    doc.setFontSize(18); doc.text("Detailed Sales Report for Current Month", 14, 22); // More descriptive title
+    doc.setFontSize(10); doc.text(`For: ${now.toLocaleString('default', { month: 'long' })} ${currentYear}`, 14, 28);
+    doc.setFontSize(12);
+    let y = 40; doc.text("Product", 14, y); doc.text("Quantity", 80, y); doc.text("Price Each", 120, y); doc.text("Total Price", 160, y); y += 10;
+    let grandTotal = 0;
+    Object.values(productTotals).forEach(p => {
+      const lineTotal = p.qty * p.price; grandTotal += lineTotal;
+      doc.text(p.name, 14, y); doc.text(String(p.qty), 80, y); doc.text(`Rs. ${(+p.price).toFixed(2)}`, 120, y); doc.text(`Rs. ${lineTotal.toFixed(2)}`, 160, y); y += 10;
+    });
+    y += 10; doc.setFontSize(14); doc.text(`Total Sales: Rs. ${grandTotal.toFixed(2)}`, 14, y);
+    doc.save(`Monthly_Sales_Detailed_Report_${now.getFullYear()}_${now.getMonth()+1}.pdf`); // Dynamic filename
+    showNotification("Monthly Sales PDF report generated.", 3000);
+  });
+
+  resetSalesBtn.addEventListener("click", resetAllSalesData);
+
+  // Backup export / import (helps EXE users keep permanent copies)
+  exportBtn.addEventListener("click", () => {
+    const backup = {
+      products: JSON.parse(localStorage.getItem("products") || "[]"),
+      monthlySales: JSON.parse(localStorage.getItem("monthlySales") || "{}"),
+      dailySales: JSON.parse(localStorage.getItem("dailySales") || "{}"),
+      receipts: JSON.parse(localStorage.getItem("receipts") || "[]")
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `POS_Backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  importFile.addEventListener("change", async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const text = await file.text(); const data = JSON.parse(text);
+      if (data.products) localStorage.setItem("products", JSON.stringify(data.products));
+      if (data.monthlySales) localStorage.setItem("monthlySales", JSON.stringify(data.monthlySales));
+      if (data.dailySales) localStorage.setItem("dailySales", JSON.stringify(data.dailySales));
+      if (data.receipts) localStorage.setItem("receipts", JSON.stringify(data.receipts));
+      products = JSON.parse(localStorage.getItem("products")) || [];
+      monthlySales = JSON.parse(localStorage.getItem("monthlySales")) || {};
+      dailySales = JSON.parse(localStorage.getItem("dailySales")) || {};
+      renderProducts(); renderMonthlySales(); renderDailySales();
+      showNotification("✅ Backup imported successfully.", 3000);
+    } catch(err){ console.error(err); showNotification("❌ Failed to import backup.", 3000); }
+  });
+</script>
+</body>
+</html>
