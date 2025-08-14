@@ -22,13 +22,7 @@
     function showNotification(message, duration = 3000) { notificationEl.textContent = message; notificationEl.classList.add("show"); setTimeout(() => notificationEl.classList.remove("show"), duration); }
 
     const defaultProducts = [
-      { code: "m001", name: "Milk", price: 50, stock: 10 },
-      { code: "m002", name: "Mango Juice", price: 120, stock: 15 },
-      { code: "s001", name: "Sugar", price: 70, stock: 25 },
-      { code: "c001", name: "Cookies", price: 150, stock: 18 },
-      { code: "b001", name: "Bread", price: 40, stock: 20 },
-      { code: "t001", name: "Tea", price: 90, stock: 22 },
-      { code: "o001", name: "Oil", price: 180, stock: 12 }
+
     ];
 
     function loadProducts() {
