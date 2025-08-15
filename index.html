@@ -81,7 +81,7 @@
       if (!username || !password) {
         error.textContent = "⚠ Please fill in all fields"; error.style.display = "block"; return;
       }
-      if (username === "AHSAN" && password === "12345") {
+      if (username === "" && password === "") {
         window.location.href = "dashboard.html";
       } else {
         error.textContent = "❌ Invalid username or password"; error.style.display = "block";
